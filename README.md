@@ -18,7 +18,7 @@ Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 
 ## How to play
 
-- Cards only move **horizontally**. Swap the card under the cursor with its neighbour, or slide it along the row.
+- Cards only move **horizontally**, **one space per move**. Swap the card under the cursor with its neighbour, or move it one space left or right.
 - Make a hand of **3 or more cards in a straight line**, in a row or a column. It flashes, clears, and scores.
 - Cards above a cleared hand fall. If they land in a new hand, that's a **chain**, and every link multiplies the score.
 - Clearing two or more hands at once earns a **shape bonus**.
@@ -46,13 +46,13 @@ Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 |---|---|
 | Arrow keys | Move the cursor |
 | Space / Z | Swap the selected card with its neighbour |
-| A / D | Slide the selected card left / right |
+| A / D | Move the selected card one space left / right (one space per press) |
 | X / Shift (hold) | Raise the stack faster |
 | C (hold) | Slow-mo (uses the energy bar) |
 | B | Bomb the selected card (start with 3, max 5, earn more by scoring) |
 | P / Esc | Pause |
 | M | Mute |
-| Mouse / touch | Click a card, then its neighbour, to swap them, or drag a card sideways |
+| Mouse / touch | Click a card, then its neighbour, to swap them, or drag a card one space sideways (one swap per drag) |
 
 ## Modes
 

@@ -465,7 +465,8 @@ function onKey(e,down){
   }
   if(app==='paused'){if(code==='KeyP'||k==='Escape'||k==='Enter')app='playing';else if(code==='KeyQ'){app='title';}return;}
   if(app!=='playing')return;
-  if(e.repeat&&(k===' '||code==='KeyZ'||code==='KeyB'))return;
+  // one space per action: swaps, A/D moves and bombs ignore key auto-repeat (arrow navigation may repeat)
+  if(e.repeat&&(k===' '||code==='KeyZ'||code==='KeyB'||code==='KeyA'||code==='KeyD'))return;
   switch(true){
     case k==='ArrowLeft':moveCursor(0,-1);break;
     case k==='ArrowRight':moveCursor(0,1);break;
@@ -496,12 +497,16 @@ canvas.addEventListener('pointerdown',e=>{
   try{canvas.setPointerCapture(e.pointerId);}catch(_){}
   if(S.sel&&S.sel.r===cell.r&&Math.abs(S.sel.c-cell.c)===1){trySwap(cell.r,S.sel.c,cell.c);S.cursor={r:cell.r,c:cell.c};S.sel=null;S.drag=null;return;}
   S.cursor={r:cell.r,c:cell.c};
-  S.drag={r:cell.r,c:cell.c,moved:false};
+  S.drag={r:cell.r,c:cell.c,x0:p.x,moved:false,done:false};
 });
 canvas.addEventListener('pointermove',e=>{
   if(!S||app!=='playing'||!S.drag)return;
-  const p=toGame(e);const c=clamp(Math.floor((p.x-BX)/CW),0,COLS-1);
-  while(S.drag&&c!==S.drag.c){const d=c>S.drag.c?1:-1;if(trySwap(S.drag.r,S.drag.c,S.drag.c+d)){S.drag.c+=d;S.drag.moved=true;S.cursor={r:S.drag.r,c:S.drag.c};S.sel=null;}else break;}
+  // one drag = at most one swap with the neighbour, after crossing half a tile; the rest of the gesture is ignored
+  if(S.drag.done)return;
+  const p=toGame(e);const dx=p.x-S.drag.x0;
+  if(Math.abs(dx)<CW/2)return;
+  const d=dx>0?1:-1;S.drag.moved=true;S.sel=null;
+  if(trySwap(S.drag.r,S.drag.c,S.drag.c+d)){S.drag.c+=d;S.drag.done=true;S.cursor={r:S.drag.r,c:S.drag.c};}
 });
 canvas.addEventListener('pointerup',()=>{
   if(!S||!S.drag)return;
@@ -659,7 +664,7 @@ function drawHUD(){
   list.forEach((l,i)=>{const col=i%2,row=Math.floor(i/2);const xx=x+16+col*172,yy=y+52+row*24;label(l[0],xx,yy,14,'#fff4dc');label(l[1],xx+156,yy,14,'#ffd45a','right');});
   label('x chain  ·  x1.5 per extra hand at once',x+w/2,y+166,12,'#d8c8a8','center');
   // controls hint under the chip deck
-  shadowLabel('Arrows move · Space swap · A/D slide · X raise · C slow-mo · B bomb · P pause',232,582,12.5,'#f3e6c8','center');
+  shadowLabel('Arrows move · Space swap · A/D move 1 · X raise · C slow-mo · B bomb · P pause',232,582,12.5,'#f3e6c8','center');
 }
 
 function button(x,y,w,h,text,sel,action,sub){
@@ -681,9 +686,9 @@ function drawTitle(){
   button(mx-180,234,360,70,'TIMED',menuSel===1,()=>{menuSel=1;newGame('timed');},'3:00  ·  Best '+loadBest('timed').toLocaleString('en-US'));
   nine('panel_9slice',mx-200,330,400,320,16);
   shadowLabel('HOW TO PLAY',mx-176,366,20,'#ffe7a0');
-  const how=['Slide cards sideways to make poker','hands in rows or columns:','3+ of a kind · flush (4+ one suit)','straight · full house · royal flush.','Falling cards that make new hands = CHAINS.'];
+  const how=['Move cards sideways (one space per move)','to make poker hands in rows or columns:','3+ of a kind · flush (4+ one suit)','straight · full house · royal flush.','Falling cards that make new hands = CHAINS.'];
   how.forEach((l,i)=>label(l,mx-176,394+i*21,15,'#fff4dc'));
-  const ctl=[['Arrows','move cursor'],['Space / Z','swap'],['A / D','slide card'],['X / Shift','raise stack'],['C · B · P','slow-mo · bomb · pause']];
+  const ctl=[['Arrows','move cursor'],['Space / Z','swap'],['A / D','move card 1 space'],['X / Shift','raise stack'],['C · B · P','slow-mo · bomb · pause']];
   ctl.forEach((l,i)=>{label(l[0],mx-176,516+i*22,15,'#ffe7a0');label(l[1],mx-66,516+i*22,15,'#f0e2c4');});
   shadowLabel('Press ENTER to deal',mx,688,22,'rgba(255,225,140,'+(0.6+0.4*Math.sin(T*4))+')','center',FONT_BIG);
 }
@@ -694,7 +699,7 @@ function drawPaused(){
   dim(0.55);
   const a=0.8+0.2*Math.sin(T*4);drawBannerAt('paused',640,196,0.9,a);
   solidPanel(440,262,400,250);
-  const ctl=[['Arrows','move cursor'],['Space / Z','swap with neighbour'],['A / D','slide card'],['X / Shift','raise stack'],['C · B','slow-mo · bomb'],['Q','quit to menu']];
+  const ctl=[['Arrows','move cursor'],['Space / Z','swap with neighbour'],['A / D','move card 1 space'],['X / Shift','raise stack'],['C · B','slow-mo · bomb'],['Q','quit to menu']];
   ctl.forEach((l,i)=>{label(l[0],470,298+i*24,16,'#ffe7a0');label(l[1],590,298+i*24,16,'#fff4dc');});
   button(460,440,170,54,'RESUME',true,()=>{app='playing';});button(650,440,170,54,'MENU',false,()=>{app='title';});
 }
