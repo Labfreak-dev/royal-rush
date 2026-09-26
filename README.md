@@ -6,13 +6,15 @@
 
 ![Royal Rush title screen](media/title.png)
 
-![Royal Rush gameplay: a flush clearing, with the banner, sparks and chip rain](media/screenshot.png)
+![Royal Rush gameplay](media/screenshot.png)
+
+![Royal Rush clear: a flush popping with starbursts, light pillars and comet sparks](media/clear.png)
 
 ![Royal Rush danger mode: the stack nears the top](media/danger.png)
 
 A rising-stack poker puzzle game for the browser. A stack of playing cards (10, J, Q, K and A in four suits) climbs up a 5 × 12 board. Slide cards sideways to make poker hands in any row or column. Each hand clears, the cards above fall into the gaps, and a new hand formed by falling cards starts a chain. If the stack reaches the top, the game is over.
 
-Cards are glossy blocks coloured by rank, so you can read the board at a glance: **10 gold, J green, Q pink, K blue, A silver**. The suit symbol on each card is used for flushes. The game is set in a tiki jungle. Clears flash, pop one card at a time with starbursts and comet sparks, and big hands rain poker chips.
+Cards are glossy blocks coloured by rank, so you can read the board at a glance: **10 gold, J green, Q pink, K blue, A silver**. The suit symbol on each card is used for flushes. The game is set in a tiki jungle. Clears flash white, pop one card at a time with starbursts, light pillars and glinting comet sparks, and big hands rain poker chips.
 
 Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 
@@ -64,7 +66,7 @@ Your best score for each mode is saved in your browser.
 ## Files
 
 - `index.html` / `royal-rush.html`: the complete game, one self-contained file with all art embedded.
-- `media/`: screenshots (title, gameplay, danger mode).
+- `media/`: screenshots (title, gameplay, a clear mid-animation, danger mode).
 - `tools/`: `royal-rush.src.html` (game source) and `assets.json` (embedded art bundle). Run `python3 tools/build_html.py` to rebuild both HTML files from them.
 
 ## Credits

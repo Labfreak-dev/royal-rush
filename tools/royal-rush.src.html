@@ -14,7 +14,7 @@
 <body>
 <canvas id="game" tabindex="0"></canvas>
 <script>
-/* Art: original art made for this project (v2 tiki/jungle pack, trimmed + embedded by tools/build_assets.py).
+/* Art: original art made for this project (v3 tiki/jungle pack, trimmed + embedded by tools/build_assets.py).
    Fonts: Luckiest Guy (Apache 2.0), Lilita One (SIL OFL 1.1). */
 /*__ASSETS__*/
 </script>
@@ -29,8 +29,8 @@ const RANKS=['10','J','Q','K','A'];
 const SUITS=['S','H','D','C'];
 // timings (artist spec, 30 fps frames)
 const F=1/30;
-const FLASH=5*F, POP=F, REMOVE_AFTER=4*F, HOVER=6*F, FALL_STEP=TS/840, SWAP_T=0.08, SMEAR_T=SWAP_T+0.06;
-const SHAKE_T=8*F, BANNER_T=1.7, GRACE=2.0, RAISE_SPEED=7, INTRO=1.6;
+const FLASH=6*F, POP=F, REMOVE_AFTER=4*F, HOVER=6*F, FALL_STEP=TS/840, SWAP_T=0.08, SMEAR_T=SWAP_T+0.06;
+const SHAKE_T=9*F, BANNER_T=1.7, GRACE=2.0, RAISE_SPEED=7, INTRO=1.6;
 const FLOOR={floor:true};
 const FONT_BIG='"Luckiest","Trebuchet MS",Arial,sans-serif';
 const FONT_UI='"Lilita","Trebuchet MS",Arial,sans-serif';
@@ -202,7 +202,7 @@ function newGame(mode){
      timeLeft:mode==='timed'?180:0,cursor:{r:ROWS-4,c:2},stop:0,grace:GRACE,bombs:3,nextBombAt:3000,
      slowEnergy:1,slowing:false,challenge:null,nextChallenge:25,popups:[],banners:[],fx:[],sparks:[],chipsFx:[],events:[],
      shakeT:0,shakeAmp:0,hands:0,cleared:0,best:loadBest(mode),newBest:false,overT:0,overReason:'',
-     sel:null,drag:null,lastWarn:0,intro:INTRO,inDanger:false,dangerCool:0,shifts:0,lvlGlow:0,clearAge:-1};
+     sel:null,drag:null,lastWarn:0,intro:INTRO,inDanger:false,dangerCool:0,shifts:0,lvlGlow:0,clearAge:-1,wellFlash:-1,sparkBudget:SPARK_CAP};
   const heights=[];for(let c=0;c<COLS;c++)heights.push(5+rnd(3));
   for(let c=0;c<COLS;c++)for(let h=0;h<heights[c];h++){
     const r=ROWS-1-h;
@@ -237,7 +237,7 @@ function slide(dir){const {r,c}=S.cursor;if(trySwap(r,c,c+dir))S.cursor.c=c+dir;
 function useBomb(){
   const k=cardAt(S.cursor.r,S.cursor.c);
   if(!k||S.bombs<=0||!(k.st==='idle'||k.st==='hover'))return;
-  S.bombs--;k.st='clear';k.bomb=true;k.t=0;k.popAt=0.3;k.endAt=0.3+REMOVE_AFTER;k.popped=false;k.chain=false;k.fxKey='gold';k.pillar=false;
+  S.bombs--;k.st='clear';k.bomb=true;k.t=0;k.popAt=0.3;k.endAt=0.3+REMOVE_AFTER;k.popped=false;k.chain=false;k.fxKey='gold';k.pillar=false;k.popA=1;k.pilA=0.8;S.sparkBudget=Math.max(S.sparkBudget,14);
   S.stop=Math.max(S.stop,3);
   sfx.bomb();
 }
@@ -253,11 +253,15 @@ function later(delay,fn){S.events.push({t:delay,fn});}
 function shake(amp){S.shakeAmp=S.shakeT>0?Math.max(S.shakeAmp,amp):amp;S.shakeT=SHAKE_T;}
 function addFx(sheet,x,y,o){S.fx.push(Object.assign({sheet,x,y,t:0,life:META[sheet].n/(META[sheet].fps||30)},o||{}));}
 const SP=META.sparks.physics,FXS=TS/64;
+// v3 sparks (sparks_v3.json): 8-12 per tile, radial + up-bias 300, colour mix 60% rank / 30% white / 10% gold,
+// glint on ~50%, capped at 60 live sparks per clear (S.sparkBudget is reset by each clear)
+const SPARK_CAP=60;
 function spawnSparks(x,y,col,n){
   n=n||(SP.count_per_tile[0]+rnd(SP.count_per_tile[1]-SP.count_per_tile[0]+1));
+  n=Math.min(n,Math.max(0,S.sparkBudget));S.sparkBudget-=n;
   for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=rr_(SP.speed_px_s[0],SP.speed_px_s[1])*FXS;const u=Math.random();
-    const c=col==='gold'?(u<0.6?'gold':'white'):(u<0.65?col:u<0.9?'white':'gold');
-    S.sparks.push({x:x+rr_(-0.25,0.25)*TS,y:y+rr_(-0.25,0.25)*TS,vx:sp*Math.cos(a),vy:sp*Math.sin(a)-260*FXS,age:0,life:rr_(SP.lifetime_s[0],SP.lifetime_s[1]),col:c,sz:rr_(SP.size_scale[0],SP.size_scale[1]),seed:Math.random()*6});}
+    const c=col==='gold'?(u<0.6?'gold':'white'):(u<0.6?col:u<0.9?'white':'gold');
+    S.sparks.push({x:x+rr_(-0.25,0.25)*TS,y:y+rr_(-0.25,0.25)*TS,vx:sp*Math.cos(a),vy:sp*Math.sin(a)-300*FXS,age:0,life:rr_(SP.lifetime_s[0],SP.lifetime_s[1]),col:c,sz:rr_(SP.size_scale[0],SP.size_scale[1]),seed:Math.random()*6,glint:Math.random()<0.5});}
 }
 const CHIP_COLS=['red','blue','green','black','purple','gold','white'];
 function chipRain(n){for(let i=0;i<n;i++){const left=Math.random()<0.5;
@@ -283,6 +287,7 @@ function update(rdt){
   if(S.shakeT>0){S.shakeT=Math.max(0,S.shakeT-rdt);if(!S.shakeT)S.shakeAmp=0;}
   S.lvlGlow=Math.max(0,S.lvlGlow-rdt);
   if(S.clearAge>=0)S.clearAge+=rdt;
+  if(S.wellFlash>=0)S.wellFlash+=rdt;
   if(app==='gameover'){S.overT+=rdt;return;}
   if(app!=='playing')return;
 
@@ -310,8 +315,8 @@ function update(rdt){
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const k=g[r][c];if(!k||k.st!=='clear')continue;
     k.t+=dt;
     if(!k.popped&&k.t>=k.popAt){k.popped=true;const p=cellCenter(r,c);
-      addFx('pop_'+k.fxKey,p.x,p.y,{alpha:0.72,blend:'lighter',board:true});
-      if(k.pillar)addFx('pillar_'+k.fxKey,p.x,p.y,{alpha:0.5,blend:'lighter',board:true});
+      addFx('pop_'+k.fxKey,p.x,p.y,{alpha:k.popA,blend:'lighter',board:true});
+      if(k.pillar)addFx('pillar_'+k.fxKey,p.x,p.y,{alpha:k.pilA,blend:'lighter',board:true});
       spawnSparks(p.x,p.y,k.fxKey==='gold'?'gold':k.fxKey,k.bomb?14:0);
       if(k.bomb)shake(8);else sfx.pop(k.popIdx||0);}
     if(k.t>=k.endAt)removeList.push([r,c,k]);}
@@ -331,7 +336,7 @@ function update(rdt){
     if(k.st==='fall'){
       if(free){k.fa+=dt;if(k.fa>=FALL_STEP){k.fa-=FALL_STEP;g[r+1][c]=k;g[r][c]=null;k.offY=Math.max(-1,k.offY-1);}}
       else if(!moving){k.st='idle';k.offY=0;k.landF=frameNo;
-        if(below.floor||below.landF!==frameNo){const p=cellXY(r,c);addFx('puff_dust',p.x+CW/2,p.y+CH,{board:true});addFx('puff_light',p.x+CW/2,p.y+CH,{board:true,alpha:0.22,blend:'lighter'});sfx.land();}}
+        if(below.floor||below.landF!==frameNo){const p=cellXY(r,c);addFx('puff_dust',p.x+CW/2,p.y+CH,{board:true});addFx('puff_light',p.x+CW/2,p.y+CH,{board:true,alpha:0.8,blend:'lighter'});sfx.land();}}
     }
   }
 
@@ -401,8 +406,11 @@ function resolveHands(hands){
   const pillar=hands.some(h=>PILLAR_FAMS[h.fam]);
   const royalCells=new Set();hands.filter(h=>h.fam==='royal').forEach(h=>h.cells.forEach(x=>royalCells.add(x.r*COLS+x.c)));
   const endAt=FLASH+(n-1)*POP+REMOVE_AFTER;
+  // v3 overlap rule: additive pops/pillars get weaker the more tiles clear together
+  const popA=n<=2?1.0:n<=4?0.8:0.6,pilA=n<=2?0.8:n<=4?0.55:0.4;
   cells.forEach((x,i)=>{const k=g[x.r][x.c];k.st='clear';k.t=0;k.popAt=FLASH+i*POP;k.endAt=endAt;k.popped=false;k.chain=false;k.popIdx=i;
-    k.fxKey=royalCells.has(x.r*COLS+x.c)?'gold':RANKS[k.r];k.pillar=pillar;});
+    k.fxKey=royalCells.has(x.r*COLS+x.c)?'gold':RANKS[k.r];k.pillar=pillar;k.popA=popA;k.pilA=pilA;});
+  S.sparkBudget=SPARK_CAP;
   let base=0;for(const h of hands)base+=h.value;
   const mult=Math.max(1,S.chain),shape=1+0.5*(hands.length-1),lf=1+(S.level-1)*0.1;
   const pts=Math.round(base*mult*shape*lf/5)*5;
@@ -413,11 +421,11 @@ function resolveHands(hands){
   groups.sort((a,b)=>b.value-a.value);
   const g0=groups[0];
   const big=pillar||hands.some(h=>h.fam==='straight')||S.chain>=2||hands.length>1;
-  const sh=royal?8:4;
+  const sh=Math.round(7*FXS);   // v3: 7 px at 64 px tiles -> 6 px at 56, decaying over 9 frames
   sfx.clear(S.chain);
   // t = 167ms: shake, banner, score popup, chip rain (the pops start now)
   later(FLASH,()=>{
-    shake(sh);
+    shake(sh);S.wellFlash=0;   // v3 well white flash: additive, alpha 0.40 then 0.14 (once per clear)
     const bo={tag:'hand_'+(g0.banner||'five_of_a_kind')};
     if(g0.banner)banner(g0.banner,bo);else banner('text:'+g0.name,bo);
     let yy=L.banner.y+72;
@@ -427,8 +435,9 @@ function resolveHands(hands){
     if(chainHit){banner('chain',{y:yy+14,scale:0.7,replace:false,num:'x'+S.chain});sfx.chain(S.chain);}
     S.popups.push({kind:'score',text:'+'+pts.toLocaleString('en-US'),x:cx,y:top-6,t:0,life:1.5,board:true});
     if(big)chipRain(royal?44:chainHit?20+S.chain*4:30);
-    if(royal){const p0=cellCenter(cells[0].r,cells[0].c),p1=cellCenter(cells[n-1].r,cells[n-1].c);
-      addFx('beam_gold',(p0.x+p1.x)/2,(p0.y+p1.y)/2,{blend:'lighter',board:true,rot:p0.x===p1.x?Math.PI/2:0});}
+    // v3 optional beam for 5-card hands (gold for a royal flush, white otherwise), alpha 0.55, centred on the hand
+    for(const h of hands){if(h.cells.length<5)continue;const hc=h.cells,p0=cellCenter(hc[0].r,hc[0].c),p1=cellCenter(hc[hc.length-1].r,hc[hc.length-1].c);
+      addFx(h.fam==='royal'?'beam_gold':'beam_white',(p0.x+p1.x)/2,(p0.y+p1.y)/2,{alpha:0.55,blend:'lighter',board:true,rot:p0.x===p1.x?Math.PI/2:0});}
   });
   S.stop=Math.max(S.stop,0.9+0.45*(S.chain-1)+0.25*(hands.length-1));
   if(S.challenge){const ok=hands.some(h=>h.fam===S.challenge.fam||(S.challenge.fam==='flush'&&h.fam==='royal')||(S.challenge.fam==='straight'&&h.fam==='royal'));
@@ -531,14 +540,20 @@ function drawEnvBack(){
 }
 function drawEnvFore(){parallax('bg_fore',1.2);}
 
+// v3 sparks: comet (rotated along velocity, anchor 0.85 = head), birth flash for 0.08 s, then a non-rotated twinkling glint
 function drawSparks(){
-  const A=META.sparks.anchor,SZ=META.sparks.size;
+  const A=META.sparks.anchor,SZ=META.sparks.size,GA=META.sparks.glint_anchor,GS=META.sparks.glint_size;
   ctx.save();ctx.globalCompositeOperation='lighter';
-  for(const s of S.sparks){const t=s.age/s.life;let a=s.age<0.12?1:Math.pow(1-t,1.6);if(t>0.6)a*=0.75+0.25*Math.sin(s.age*40+s.seed);
-    const im=img('comet_'+s.col);if(!im)continue;const sp=Math.hypot(s.vx,s.vy)/FXS;
-    const sx=clamp(0.45+sp/700,0.5,1.6)*s.sz*FXS,sy=s.sz*FXS;
-    ctx.globalAlpha=clamp(a,0,1);ctx.setTransform(DPR,0,0,DPR,0,0);ctx.translate(s.x+shx,s.y+shy);ctx.rotate(Math.atan2(s.vy,s.vx));ctx.scale(sx,sy);
-    ctx.drawImage(im,-A[0]*SZ[0],-A[1]*SZ[1],SZ[0],SZ[1]);}
+  for(const s of S.sparks){const t=s.age/s.life;const a=clamp(s.age<0.15?1:Math.pow(1-t,1.4),0,1);
+    const im=img('comet_'+s.col);if(!im)continue;const sp=Math.hypot(s.vx,s.vy)/FXS;const hot=s.age<0.08?1.35:1;
+    const sx=clamp(0.45+sp/650,0.5,1.8)*s.sz*FXS*hot,sy=s.sz*FXS*hot;
+    ctx.globalAlpha=a;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.translate(s.x+shx,s.y+shy);ctx.rotate(Math.atan2(s.vy,s.vx));ctx.scale(sx,sy);
+    ctx.drawImage(im,-A[0]*SZ[0],-A[1]*SZ[1],SZ[0],SZ[1]);
+    if(hot>1){const wi=img('comet_white');if(wi){ctx.globalAlpha=a*0.6;ctx.drawImage(wi,-A[0]*SZ[0],-A[1]*SZ[1],SZ[0],SZ[1]);}}}
+  for(const s of S.sparks){if(!(s.glint||s.age<0.1))continue;const gi=img('glint_'+s.col);if(!gi)continue;
+    const t=s.age/s.life;const a=clamp(s.age<0.15?1:Math.pow(1-t,1.4),0,1);const k=s.sz*FXS*(0.55+0.6*Math.abs(Math.sin(s.age*22+s.seed)));
+    ctx.globalAlpha=a;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.translate(s.x+shx,s.y+shy);ctx.scale(k,k);
+    ctx.drawImage(gi,-GA[0]*GS[0],-GA[1]*GS[1],GS[0],GS[1]);}
   ctx.restore();
 }
 function drawFxList(filter){
@@ -552,17 +567,21 @@ function drawBoard(){
   const g=S.grid,dead=app==='gameover';
   drawLayer('well_floor');
   ctx.save();ctx.beginPath();ctx.rect(BX,BY,BW,BH);ctx.clip();
-  const moving=[],flashes=[];
+  const moving=[],flashes=[],clearing=[];
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
     const k=g[r][c];if(!k)continue;
     const x=BX+c*CW,y=BY+(r-S.rise+k.offY)*CH;
     if(dead){const d=clamp(S.overT*1.6-(ROWS-r)*0.06,0,1);drawTile(cardName(k)+'_dim',x,y+d*d*30,1-d*0.5);continue;}
-    if(k.st==='clear'){if(k.popped)continue;drawTile(cardName(k)+'_flash',x,y);if(k.bomb)drawImg('bomb_lit',x,y,TS,TS);if(k.t<FLASH)flashes.push([k,x,y]);continue;}
+    if(k.st==='clear'){if(k.popped)continue;clearing.push([k,x,y]);if(k.t<FLASH)flashes.push([k,x,y]);continue;}
     if(k.swapT>0){moving.push([k,x,y]);continue;}
     drawTile(cardName(k),x,y);
   }
   // swap: 80ms ease-out slide with an additive gold smear behind each tile
   for(const [k,x,y] of moving){const p=1-k.swapT/SWAP_T;drawTile(cardName(k),x+k.swapFrom*CW*(1-easeOutQuad(p)),y);}
+  // v3: matched tiles squash/stretch around their centre by the flash scale_curve (hold the last frame until the pop)
+  const SC=META.scale_curve;
+  for(const [k,x,y] of clearing){const q=SC[Math.min(SC.length-1,Math.floor(k.t/F))];
+    ctx.save();ctx.translate(x+CW/2,y+CH/2);ctx.scale(q[0],q[1]);drawTile(cardName(k)+'_flash',-CW/2,-CH/2);if(k.bomb)drawImg('bomb_lit',-CW/2,-CH/2,TS,TS);ctx.restore();}
   // incoming row (dimmed), clipped at the well bottom
   if(S.preview&&!dead)for(let c=0;c<COLS;c++)drawTile(cardName(S.preview[c])+'_dim',BX+c*CW,BY+(ROWS-S.rise)*CH);
   ctx.restore();
@@ -576,15 +595,17 @@ function drawBoard(){
       ctx.restore();}
     for(const [k,x,y] of flashes)drawSheet('flash_'+k.fxKey,Math.floor(k.t/F),x+CW/2,y+CH/2,1,1,'lighter');
     drawFxList(f=>f.sheet.startsWith('puff'));
-    if(S.inDanger){const m=META.pulse;drawSheet('pulse',Math.floor(T*15)%m.n,BX,BY);}
+    if(S.inDanger){const m=META.pulse,fi=Math.floor(T*15)%m.n;drawSheet('pulse',fi,BX,BY);drawSheet('pulse_glow',fi,BX,BY,1,1,'lighter');}
     if(S.slowing){ctx.save();ctx.fillStyle='rgba(90,170,255,0.13)';ctx.fillRect(BX,BY,BW,BH);ctx.restore();}
   }
   drawLayer('well_rails');
   if(dead)return;
   if(S.inDanger)drawSheet('laser',Math.floor(T*15)%META.laser.n,BX+BW/2,BY,1,1,'lighter');
-  // additive: pillars, pop starbursts, royal beam
+  // additive: beam, pillars, pop starbursts, then the well white flash (sparks are drawn after the board)
+  drawFxList(f=>f.sheet.startsWith('beam'));
   drawFxList(f=>f.sheet.startsWith('pillar'));
-  drawFxList(f=>f.sheet.startsWith('pop')||f.sheet.startsWith('beam'));
+  drawFxList(f=>f.sheet.startsWith('pop'));
+  if(S.wellFlash>=0&&S.wellFlash<2*F){ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle='rgba(255,255,255,'+(S.wellFlash<F?0.40:0.14)+')';ctx.fillRect(BX,BY,BW,BH);ctx.restore();}
 }
 function drawCursor(){
   if(!(app==='playing'||app==='paused'))return;
@@ -726,7 +747,7 @@ function render(){
   if(!assetsReady){ctx.fillStyle='#0d0a05';ctx.fillRect(0,0,W,H);label('Loading…',W/2,H/2,24,'#fff0c8','center');return;}
   if(app==='title'||!S){drawTitle();return;}
   drawEnvBack();
-  // shake group: 8 frames, amplitude decaying linearly, offset (A sin 2.7f, A cos 3.9f)
+  // shake group: 9 frames, amplitude decaying linearly, offset (A sin 2.7f, A cos 3.9f)
   shx=shy=0;
   if(S.shakeT>0){const f=frameNo,A=S.shakeAmp*(S.shakeT/SHAKE_T);shx=Math.round(A*Math.sin(2.7*f));shy=Math.round(A*Math.cos(3.9*f));}
   ctx.save();ctx.translate(shx,shy);
@@ -775,7 +796,7 @@ window.__royalRush={
   get popups(){return S?S.banners.map(b=>b.tag||'banner_'+b.key).concat(S.popups.map(p=>p.text)):[];},
   get danger(){return S?S.inDanger:false;},
   get clearAge(){return S?S.clearAge:-1;},
-  get fx(){return S?{sparks:S.sparks.length,chips:S.chipsFx.length,fx:S.fx.map(f=>f.sheet),shake:S.shakeT}:null;},
+  get fx(){return S?{sparks:S.sparks.length,glints:S.sparks.filter(s=>s.glint).length,chips:S.chipsFx.length,fx:S.fx.map(f=>f.sheet+(f.alpha!=null?'@'+f.alpha:'')),shake:S.shakeT,shakeAmp:S.shakeAmp,wellFlash:S.wellFlash}:null;},
   start(mode){newGame(mode||'action');},
   setGrid(rows){if(!S)newGame('action');S.grid=rows.map(r=>r.map(parseCard));S.rise=0;S.clearAge=-1;},
   setSpeedMultiplier(m){speedMul=m;},
