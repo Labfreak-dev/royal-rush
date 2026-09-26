@@ -185,14 +185,14 @@ function emptyGrid(){const g=[];for(let r=0;r<ROWS;r++){g.push(new Array(COLS).f
 const allElig=()=>true;
 const cardName=k=>RANKS[k.r]+SUITS[k.s];
 
+// The incoming row is generated once, before it is ever shown, and is then immutable until it enters.
+// Anti-match runs here only: the row never forms a hand on its own (within its own 5 cards).
+// Hands it makes with cards already on the board when it enters resolve normally (planning ahead).
 function genRow(){
   let row;
   for(let t=0;t<80;t++){
     row=[];for(let c=0;c<COLS;c++)row.push(newCard());
-    const tmp=[];for(let r=Math.max(0,ROWS-3);r<ROWS;r++)tmp.push(S.grid[r].slice());
-    tmp.push(row);
-    const hs=findHands(tmp,allElig).filter(h=>h.cells.some(x=>x.r===tmp.length-1));
-    if(!hs.length)break;
+    if(!findHands([row],allElig).length)break;
   }
   return row;
 }
@@ -379,8 +379,7 @@ function riseSpeed(l){return Math.min(2.2,0.1*Math.pow(1.13,l-1));}
 function shiftUp(){
   S.shifts++;S.rise-=1;if(S.rise<0)S.rise=0;
   for(let r=0;r<ROWS-1;r++)S.grid[r]=S.grid[r+1];
-  S.grid[ROWS-1]=S.preview;
-  for(let c=0;c<COLS;c++){for(let t=0;t<30;t++){const hs=findHands(S.grid,k=>k.st==='idle'||k===S.grid[ROWS-1][c]).filter(h=>h.cells.some(x=>x.r===ROWS-1));if(!hs.length)break;const k=S.grid[ROWS-1][hs[0].cells.find(x=>x.r===ROWS-1).c];k.r=rnd(5);k.s=rnd(4);}}
+  S.grid[ROWS-1]=S.preview;          // exactly the row that was shown: no reroll at insertion
   S.preview=genRow();
   S.cursor.r=Math.max(0,S.cursor.r-1);
   if(S.sel)S.sel.r--; if(S.sel&&S.sel.r<0)S.sel=null;
