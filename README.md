@@ -53,7 +53,7 @@ Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 | C (hold) | Slow-mo (uses the energy bar) |
 | B | Bomb the selected card (start with 3, max 5, earn more by scoring) |
 | P / Esc | Pause |
-| M | Mute |
+| M | Mute music and sound effects |
 | Mouse / touch | Click a card, then its neighbour, to swap them, or drag a card one space sideways (one swap per drag) |
 
 ## Modes
@@ -63,12 +63,16 @@ Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 
 Your best score for each mode is saved in your browser.
 
+## Audio
+
+The game has looping lounge music for the menu, gameplay and danger mode (it crossfades into a faster track when the stack nears the top), and sound effects for swaps, landings, rising rows, every hand, chains, level-ups and game over. Sound starts after your first click or key press (browser autoplay rules). Pausing ducks the music, and **M** mutes everything. Browsers that can't play Ogg Vorbis (Safari older than 17) get simple built-in sound effects and no music.
+
 ## Files
 
 - `index.html` / `royal-rush.html`: the complete game, one self-contained file with all art embedded.
 - `media/`: screenshots (title, gameplay, a clear mid-animation, danger mode).
-- `tools/`: `royal-rush.src.html` (game source) and `assets.json` (embedded art bundle). Run `python3 tools/build_html.py` to rebuild both HTML files from them.
+- `tools/`: `royal-rush.src.html` (game source) and `assets.json` (embedded art and audio bundle). Run `python3 tools/build_html.py` to rebuild both HTML files from them.
 
 ## Credits
 
-Art: original art made for this project. Fonts: Luckiest Guy (Apache 2.0) and Lilita One (SIL OFL 1.1).
+Art: original art made for this project. Audio: original music and sound effects made for this project; music created with ElevenLabs. Fonts: Luckiest Guy (Apache 2.0) and Lilita One (SIL OFL 1.1).

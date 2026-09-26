@@ -15,6 +15,7 @@
 <canvas id="game" tabindex="0"></canvas>
 <script>
 /* Art: original art made for this project (v3 tiki/jungle pack, trimmed + embedded by tools/build_assets.py).
+   Audio: original music and sound effects made for this project (music created with ElevenLabs), embedded by tools/build_audio.py.
    Fonts: Luckiest Guy (Apache 2.0), Lilita One (SIL OFL 1.1). */
 /*__ASSETS__*/
 </script>
@@ -111,24 +112,86 @@ function makeBanner(text,size){
   x.fillStyle=g;x.fillText(text,cx,cy);
   c.dw=w;c.dh=h;madeBanners[key]=c;return c;}
 // ---------- audio ----------
-let AC=null,muted=false;
-function ensureAudio(){try{if(!AC){const A=window.AudioContext||window.webkitAudioContext;if(A)AC=new A();}else if(AC.state==='suspended')AC.resume().catch(()=>{});}catch(e){AC=null;}}
-function tone(f,d,type,vol,slide,delay){if(!AC||muted||AC.state!=='running')return;const t0=AC.currentTime+(delay||0);const o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t0);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f*slide),t0+d);g.gain.setValueAtTime(vol||0.08,t0);g.gain.exponentialRampToValueAtTime(0.0001,t0+d);o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+d+0.03);}
+// Sampled audio pack (Ogg Vorbis, embedded) played through Web Audio. Music loops use AudioBufferSourceNode.loop
+// (sample-exact, gapless). If a sound can't be decoded (e.g. Safari < 17 has no Vorbis), SFX fall back to the
+// procedural tones below and the music stays silent; nothing throws.
+let AC=null,muted=false,MASTER=null,MUSIC_BUS=null,SFX_BUS=null,audioInit=false;
+const BUF={},DECODE_ERR=[],AUD_LOG=[],AUD_LAST={};let decodePending=0,decodeDone=false;
+const MUSIC_VOL={game_loop:0.55,menu_loop:0.5,danger_loop:0.55};
+const XFADE=0.5;
+const MUS={want:null,tracks:{},duck:1,duckUntil:0,offsets:{}};
+function ensureAudio(){try{
+  if(!AC){const A=window.AudioContext||window.webkitAudioContext;if(!A)return;AC=new A();}
+  if(AC.state==='suspended'&&!document.hidden)AC.resume().catch(()=>{});
+  if(!audioInit){audioInit=true;
+    MASTER=AC.createGain();MASTER.gain.value=muted?0:1;MASTER.connect(AC.destination);
+    MUSIC_BUS=AC.createGain();MUSIC_BUS.connect(MASTER);SFX_BUS=AC.createGain();SFX_BUS.connect(MASTER);
+    const names=Object.keys(ASSETS.audio||{});decodePending=names.length;
+    // music first so it is ready soonest
+    names.sort((a,b)=>(ASSETS.audioMeta[b].kind==='music')-(ASSETS.audioMeta[a].kind==='music'));
+    for(const n of names){let p;
+      const ok=b=>{BUF[n]=b;},bad=e=>{DECODE_ERR.push(n);},fin=()=>{if(--decodePending<=0)decodeDone=true;};
+      try{p=AC.decodeAudioData(b64ToBuf(ASSETS.audio[n]),ok,bad);if(p&&p.then)p.then(()=>{},()=>{}).then(fin);else setTimeout(fin,0);}
+      catch(e){bad(e);fin();}}
+  }}catch(e){AC=null;}}
+function audioOn(){return !!(AC&&audioInit&&AC.state==='running');}
+function setMuted(m){muted=m;if(MASTER){MASTER.gain.cancelScheduledValues(AC.currentTime);MASTER.gain.setTargetAtTime(m?0:1,AC.currentTime,0.02);}}
+// play a decoded SFX; returns false if unavailable (caller may fall back to a tone)
+function playSfx(n,vol,rate,throttle){
+  if(!BUF[n])return false;if(!audioOn())return true;
+  const now=AC.currentTime;if(throttle&&AUD_LAST[n]!=null&&now-AUD_LAST[n]<throttle)return true;AUD_LAST[n]=now;
+  try{const s=AC.createBufferSource(),g=AC.createGain();s.buffer=BUF[n];if(rate)s.playbackRate.value=rate;g.gain.value=vol;s.connect(g);g.connect(SFX_BUS);s.start();
+    AUD_LOG.push(n);if(AUD_LOG.length>60)AUD_LOG.shift();}catch(e){}
+  return true;}
+function tone(f,d,type,vol,slide,delay){if(!audioOn())return;const t0=AC.currentTime+(delay||0);const o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t0);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f*slide),t0+d);g.gain.setValueAtTime(vol||0.08,t0);g.gain.exponentialRampToValueAtTime(0.0001,t0+d);o.connect(g);g.connect(SFX_BUS);o.start(t0);o.stop(t0+d+0.03);}
+// ---- music: one wanted track at a time, 0.5 s crossfades; game_loop resumes where it left off after danger ----
+function musicStart(n){const b=BUF[n];if(!b)return null;const s=AC.createBufferSource(),g=AC.createGain();s.buffer=b;s.loop=true;s.loopStart=0;s.loopEnd=b.duration;
+  g.gain.value=0;s.connect(g);g.connect(MUSIC_BUS);const off=(MUS.offsets[n]||0)%b.duration;s.start(AC.currentTime,off);
+  const t={n,src:s,gain:g,t0:AC.currentTime-off,level:0};g.gain.setTargetAtTime(MUSIC_VOL[n],AC.currentTime,XFADE/4);t.level=MUSIC_VOL[n];return t;}
+function musicStop(t,fade){const now=AC.currentTime;if(t.n==='game_loop')MUS.offsets[t.n]=(now-t.t0)%t.src.buffer.duration;
+  t.gain.gain.cancelScheduledValues(now);t.gain.gain.setValueAtTime(t.gain.gain.value,now);t.gain.gain.linearRampToValueAtTime(0,now+fade);try{t.src.stop(now+fade+0.05);}catch(e){}t.level=0;}
+function musicWanted(){if(app==='title')return 'menu_loop';if(!S)return null;
+  if(app==='gameover')return null;return S.inDanger?'danger_loop':'game_loop';}
+function musicTick(){
+  if(!audioOn())return;
+  const w=musicWanted();
+  if(w!==MUS.want){const prev=MUS.want;MUS.want=w;
+    for(const k of Object.keys(MUS.tracks)){musicStop(MUS.tracks[k],app==='gameover'?0.4:XFADE);delete MUS.tracks[k];}
+    if(w==='menu_loop'||prev==='menu_loop'||prev===null)MUS.offsets.game_loop=0;
+    MUS.pendingStart=w;}
+  if(MUS.pendingStart&&BUF[MUS.pendingStart]){const t=musicStart(MUS.pendingStart);if(t)MUS.tracks[t.n]=t;MUS.pendingStart=null;}
+  // pause ducks the music to 25 %, a royal flush ducks it by 6 dB for 2.5 s
+  const duck=(app==='paused'?0.25:1)*(AC.currentTime<MUS.duckUntil?0.5:1);
+  if(duck!==MUS.duck){MUS.duck=duck;MUSIC_BUS.gain.setTargetAtTime(duck,AC.currentTime,0.08);}
+}
+let gameOverSfxAt=0;
+const HAND_SFX={kind3:['hand_three_kind',0.6],flush:['hand_flush',0.65],straight:['hand_straight',0.6],fullhouse:['hand_full_house',0.7],kind4:['hand_four_kind',0.75],royal:['hand_royal_flush',0.85]};
 const sfx={
-  move(){tone(660,0.03,'square',0.02);},
-  swap(){tone(420,0.05,'triangle',0.06,1.6);},
-  clear(chain){const b=440*Math.pow(1.122,Math.min(chain,12)-1);tone(b,0.18,'triangle',0.09);tone(b*1.25,0.18,'triangle',0.07,0,0.06);tone(b*1.5,0.25,'triangle',0.07,0,0.12);},
-  pop(i){tone(700+i*60,0.06,'sine',0.05,1.5);},
-  chain(n){for(let i=0;i<3;i++)tone(520*Math.pow(1.19,n+i),0.16,'square',0.035,0,i*0.07);},
-  bomb(){tone(160,0.35,'sawtooth',0.1,0.2);},
-  land(){tone(120,0.05,'sine',0.035);},
-  level(){tone(523,0.1,'square',0.04);tone(784,0.15,'square',0.04,0,0.1);},
-  over(){tone(392,0.3,'triangle',0.08,0.5);tone(262,0.5,'triangle',0.08,0.5,0.25);},
-  challenge(){tone(880,0.1,'square',0.04);tone(1175,0.2,'square',0.04,0,0.1);},
-  warn(){tone(220,0.08,'square',0.03);},
-  ready(){tone(392,0.12,'square',0.05);},
-  go(){tone(784,0.25,'square',0.06);}
+  move(){if(!playSfx('ui_click',0.22,1,0.04))tone(660,0.03,'square',0.02);},
+  swap(){if(!playSfx('card_swap',0.45))tone(420,0.05,'triangle',0.06,1.6);},
+  // best hand of the clear (by value); five of a kind = four-of-a-kind sting pitched up 2 semitones
+  hand(best,chain){const m=HAND_SFX[best.fam]||HAND_SFX.kind3;const five=best.fam==='kind4'&&best.n>=5;
+    if(best.fam==='royal'&&audioOn())MUS.duckUntil=AC.currentTime+2.5;
+    if(!playSfx(m[0],m[1],five?1.122:1)){const b=440*Math.pow(1.122,Math.min(chain,12)-1);tone(b,0.18,'triangle',0.09);tone(b*1.25,0.18,'triangle',0.07,0,0.06);tone(b*1.5,0.25,'triangle',0.07,0,0.12);}},
+  pop(i){if(!BUF.hand_three_kind)tone(700+i*60,0.06,'sine',0.05,1.5);},   // procedural fallback only
+  chain(n){const st=n-1;const name=st<=1?'combo_1':st===2?'combo_2':'combo_3';const vol=st<=1?0.55:st===2?0.58:0.6;
+    if(!playSfx(name,vol,st>3?Math.min(1.5,Math.pow(1.0595,2*(st-3))):1))for(let i=0;i<3;i++)tone(520*Math.pow(1.19,n+i),0.16,'square',0.035,0,i*0.07);},
+  bomb(){if(!playSfx('card_land',0.8,0.55))tone(160,0.35,'sawtooth',0.1,0.2);},
+  land(){if(!playSfx('card_land',0.4,1,0.06))tone(120,0.05,'sine',0.035);},
+  rise(){playSfx('row_rise',0.3,1,0.12);},
+  level(){if(!playSfx('level_up',0.65))tone(523,0.1,'square',0.04),tone(784,0.15,'square',0.04,0,0.1);},
+  over(){gameOverSfxAt=AC?AC.currentTime:0;
+    if(BUF.game_over){if(audioOn()){const d=AC.currentTime+0.35;const s=AC.createBufferSource(),g=AC.createGain();s.buffer=BUF.game_over;g.gain.value=0.7;s.connect(g);g.connect(SFX_BUS);s.start(d);AUD_LOG.push('game_over');}}
+    else{tone(392,0.3,'triangle',0.08,0.5);tone(262,0.5,'triangle',0.08,0.5,0.25);}},
+  challenge(){if(!playSfx('hand_pair',0.5))tone(880,0.1,'square',0.04),tone(1175,0.2,'square',0.04,0,0.1);},
+  challengeDone(){if(!playSfx('level_up',0.65))tone(880,0.1,'square',0.04),tone(1175,0.2,'square',0.04,0,0.1);},
+  warn(){if(!playSfx('danger_warning',0.35,1,2.0))tone(220,0.08,'square',0.03);},
+  ready(){if(!playSfx('ui_confirm',0.5))tone(392,0.12,'square',0.05);},
+  go(){if(!BUF.ui_confirm)tone(784,0.25,'square',0.06);},
+  click(){if(!playSfx('ui_click',0.4))tone(660,0.03,'square',0.02);},
+  confirm(){if(!playSfx('ui_confirm',0.5))tone(784,0.12,'square',0.04);}
 };
+document.addEventListener('visibilitychange',()=>{if(!AC)return;try{if(document.hidden)AC.suspend().catch(()=>{});else AC.resume().catch(()=>{});}catch(e){}});
 
 // ---------- hand detection ----------
 const HAND_DEF={
@@ -382,7 +445,7 @@ function update(rdt){
 function riseSpeed(l){return Math.min(2.2,0.1*Math.pow(1.13,l-1));}
 
 function shiftUp(){
-  S.shifts++;S.rise-=1;if(S.rise<0)S.rise=0;
+  S.shifts++;S.rise-=1;if(S.rise<0)S.rise=0;sfx.rise();
   for(let r=0;r<ROWS-1;r++)S.grid[r]=S.grid[r+1];
   S.grid[ROWS-1]=S.preview;          // exactly the row that was shown: no reroll at insertion
   S.preview=genRow();
@@ -422,7 +485,7 @@ function resolveHands(hands){
   const g0=groups[0];
   const big=pillar||hands.some(h=>h.fam==='straight')||S.chain>=2||hands.length>1;
   const sh=Math.round(7*FXS);   // v3: 7 px at 64 px tiles -> 6 px at 56, decaying over 9 frames
-  sfx.clear(S.chain);
+  sfx.hand(hands.reduce((a,b)=>b.value>a.value?b:a),S.chain);
   // t = 167ms: shake, banner, score popup, chip rain (the pops start now)
   later(FLASH,()=>{
     shake(sh);S.wellFlash=0;   // v3 well white flash: additive, alpha 0.40 then 0.14 (once per clear)
@@ -442,7 +505,7 @@ function resolveHands(hands){
   S.stop=Math.max(S.stop,0.9+0.45*(S.chain-1)+0.25*(hands.length-1));
   if(S.challenge){const ok=hands.some(h=>h.fam===S.challenge.fam||(S.challenge.fam==='flush'&&h.fam==='royal')||(S.challenge.fam==='straight'&&h.fam==='royal'));
     if(ok){const bonus=S.challenge.bonus;S.score+=bonus;S.challenge=null;S.nextChallenge=35;
-      later(FLASH+1.0,()=>{banner('challenge_complete',{y:330,life:1.9});textPopup('+'+bonus.toLocaleString('en-US')+' BONUS',640,382,26,'#aef6ff',{life:1.9});chipRain(24);sfx.challenge();});}}
+      later(FLASH+1.0,()=>{banner('challenge_complete',{y:330,life:1.9});textPopup('+'+bonus.toLocaleString('en-US')+' BONUS',640,382,26,'#aef6ff',{life:1.9});chipRain(24);sfx.challengeDone();});}}
 }
 
 function gameOver(reason){
@@ -459,7 +522,7 @@ function onKey(e,down){
   if(code==='KeyC'){keys.slow=down;}
   if(!down)return;
   ensureAudio();
-  if(code==='KeyM'){muted=!muted;return;}
+  if(code==='KeyM'){setMuted(!muted);return;}
   if(!assetsReady)return;
   if(app==='title'){
     if(k==='ArrowUp'||k==='ArrowDown'){menuSel=1-menuSel;sfx.move();}
@@ -469,10 +532,10 @@ function onKey(e,down){
   if(app==='gameover'){
     if(S.overT<0.8)return;
     if(k==='Enter'||k===' '||code==='KeyZ')newGame(S.mode);
-    else if(k==='Escape')app='title';
+    else if(k==='Escape'){app='title';sfx.click();}
     return;
   }
-  if(app==='paused'){if(code==='KeyP'||k==='Escape'||k==='Enter')app='playing';else if(code==='KeyQ'){app='title';}return;}
+  if(app==='paused'){if(code==='KeyP'||k==='Escape'||k==='Enter'){app='playing';sfx.click();}else if(code==='KeyQ'){app='title';sfx.click();}return;}
   if(app!=='playing')return;
   // one space per action: swaps, A/D moves and bombs ignore key auto-repeat (arrow navigation may repeat)
   if(e.repeat&&(k===' '||code==='KeyZ'||code==='KeyB'||code==='KeyA'||code==='KeyD'))return;
@@ -485,18 +548,20 @@ function onKey(e,down){
     case code==='KeyA':slide(-1);break;
     case code==='KeyD':slide(1);break;
     case code==='KeyB':useBomb();break;
-    case code==='KeyP'||k==='Escape':app='paused';break;
+    case code==='KeyP'||k==='Escape':app='paused';sfx.click();break;
   }
 }
 window.addEventListener('keydown',e=>onKey(e,true));
 window.addEventListener('keyup',e=>onKey(e,false));
+// autoplay rules: (re)start audio on any user gesture
+for(const ev of ['click','touchend'])window.addEventListener(ev,()=>ensureAudio(),{passive:true});
 window.addEventListener('blur',()=>{keys.raise=false;keys.slow=false;if(app==='playing')app='paused';});
 
 function toGame(e){const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H};}
 function cellFromPt(p){if(!S)return null;const c=Math.floor((p.x-BX)/CW);const r=Math.floor((p.y-BY)/CH+S.rise);if(c<0||c>=COLS||r<0||r>=ROWS||p.y<BY||p.y>BY+BH)return null;return {r,c};}
 canvas.addEventListener('pointerdown',e=>{
   ensureAudio();canvas.focus();const p=toGame(e);
-  for(const b of buttons){if(p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h){b.action();e.preventDefault();return;}}
+  for(const b of buttons){if(p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h){sfx.click();b.action();e.preventDefault();return;}}
   if(app==='title')return;
   if(app==='gameover'){if(S.overT>0.8)newGame(S.mode);return;}
   if(app==='paused'){app='playing';return;}
@@ -767,7 +832,7 @@ function render(){
 // ---------- loop ----------
 let last=performance.now();
 let frozen=false;
-function frame(now){const dt=frozen?0:Math.min(0.05,Math.max(0,(now-last)/1000));last=now;update(dt);render();requestAnimationFrame(frame);}
+function frame(now){const dt=frozen?0:Math.min(0.05,Math.max(0,(now-last)/1000));last=now;update(dt);try{musicTick();}catch(e){}render();requestAnimationFrame(frame);}
 window.addEventListener('resize',resize);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&app==='playing')app='paused';});
 resize();canvas.focus();loadAssets();requestAnimationFrame(frame);
@@ -804,6 +869,12 @@ window.__royalRush={
   set freeze(v){frozen=!!v;},
   get freeze(){return frozen;},
   handsIn(strGrid){const g=strGrid.map(r=>r.map(s=>s?parseCard(s):null));return findHands(g,()=>true).map(h=>({name:h.name,value:h.value,cells:h.cells}));},
+  get audio(){const T=MUS.tracks;return {ctx:AC?AC.state:'none',sampleRate:AC?AC.sampleRate:0,muted,master:MASTER?MASTER.gain.value:null,
+    decoded:Object.keys(BUF).sort(),durations:Object.fromEntries(Object.entries(BUF).map(([k,b])=>[k,+b.duration.toFixed(3)])),lengths:Object.fromEntries(Object.entries(BUF).map(([k,b])=>[k,b.length])),
+    decodeErrors:DECODE_ERR.slice(),decodeDone,want:MUS.want,
+    playing:Object.values(T).map(t=>({n:t.n,loop:t.src.loop,loopEnd:+t.src.loopEnd.toFixed(3),gain:+t.gain.gain.value.toFixed(3)})),
+    musicBus:MUSIC_BUS?+MUSIC_BUS.gain.value.toFixed(3):null,log:AUD_LOG.slice()};},
+  audioLogClear(){AUD_LOG.length=0;},
   constants:{COLS,ROWS,CW,CH,BX,BY,W,H}
 };
 })();
