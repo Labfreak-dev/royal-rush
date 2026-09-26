@@ -52,9 +52,20 @@ Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 | X / Shift (hold) | Raise the stack faster |
 | C (hold) | Slow-mo (uses the energy bar) |
 | B | Bomb the selected card (start with 3, max 5, earn more by scoring) |
-| P / Esc | Pause |
+| P / Esc | Pause (the pause menu has Resume, Settings and Menu) |
+| ⚙ gear (top left, in game) | Pause and open Settings |
 | M | Mute music and sound effects |
 | Mouse / touch | Click a card, then its neighbour, to swap them, or drag a card one space sideways (one swap per drag) |
+
+## Settings
+
+Open **Settings** from the main menu, from the pause menu, or with the gear button in the top-left corner during a game.
+
+- **Full screen:** fills the screen and keeps the board letterboxed. Esc or F11 also exits. The option is disabled where the browser has no Fullscreen API (for example iPhone Safari).
+- **Reduce flashing:** removes the white clear flashes, the whole-board flash, tile squash-and-stretch, screen shake and the flickering danger pulse. Clears become a soft fade with faint starbursts, and the danger zone gets a steady red tint.
+- **Sound effects / Music:** separate volume sliders from 0 to 100 % in steps of 10 (M still mutes everything).
+
+Use the mouse or touch (click toggles, click or drag sliders) or the keyboard: arrow keys to move and adjust, Enter/Space to toggle, Esc or B to go back. Settings are saved in your browser.
 
 ## Modes
 
