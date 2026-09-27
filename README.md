@@ -27,6 +27,7 @@ Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 - Cards above a cleared hand fall. If they land in a new hand, that's a **chain**, and every link multiplies the score.
 - Clearing two or more hands at once earns a **shape bonus**.
 - The stack rises all the time and speeds up each level. It pauses briefly while cards clear.
+- The dimmed incoming row at the bottom is exactly the row that comes in. New rows are dealt so they never complete a hand by themselves, so raising the stack only scores if you set up the match.
 - A **challenge hand** appears now and then. Make the named hand before the timer runs out for bonus points.
 
 ### Hands and points

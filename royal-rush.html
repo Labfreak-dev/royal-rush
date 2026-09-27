@@ -265,15 +265,47 @@ const allElig=()=>true;
 const cardName=k=>RANKS[k.r]+SUITS[k.s];
 
 // The incoming row is generated once, before it is ever shown, and is then immutable until it enters.
-// Anti-match runs here only: the row never forms a hand on its own (within its own 5 cards).
-// Hands it makes with cards already on the board when it enters resolve normally (planning ahead).
-function genRow(){
-  let row;
-  for(let t=0;t<80;t++){
-    row=[];for(let c=0;c<COLS;c++)row.push(newCard());
-    if(!findHands([row],allElig).length)break;
-  }
-  return row;
+// v7 anti-auto-match: it is generated when the previous row finishes arriving, against the board it will
+// land under. The board is first "settled" (clearing cards removed, falling cards dropped, and any hands that
+// would still resolve on their own cleared, repeated until stable), then the row is built cell by cell with
+// backtracking over the 20 rank/suit choices in random order, so that it forms no hand within itself
+// and no column hand with the cards that will sit above it. Only a player move made after the row appears
+// (a swap, a bomb, or a clear that changes the bottom of the board) can still make it match on arrival; among the
+// allowed cards, ones that stay safe after any single sideways move in the 4 cards above are tried first.
+function settledCols(g){
+  let cols=[];for(let c=0;c<COLS;c++){const col=[];for(let r=ROWS-1;r>=0;r--){const k=g[r][c];if(k&&k.st!=='clear')col.push({r:k.r,s:k.s});}cols.push(col);}
+  for(let it=0;it<24;it++){const h=Math.max(ROWS,...cols.map(x=>x.length)),gg=[];
+    for(let r=0;r<h;r++){const row=[];for(let c=0;c<COLS;c++)row.push(cols[c][h-1-r]||null);gg.push(row);}
+    const hs=findHands(gg,allElig);if(!hs.length)break;
+    const dead=new Set();for(const x of hs)for(const q of x.cells)dead.add(q.r*COLS+q.c);
+    cols=cols.map((col,c)=>col.filter((k,i)=>!dead.has((h-1-i)*COLS+c)));}
+  return cols;}   // per column, bottom -> top
+// hands (value) that card k would make at the bottom of column col (bottom -> top), and within row prefix pre
+function colHands(col,k){const seg=[];for(let i=col.length-1;i>=0;i--)seg.push({r:col.length-1-i,c:0,k:col[i]});seg.push({r:col.length,c:0,k});
+  if(seg.length<3)return 0;const out=[];evalSeg(seg,'v',out);let v=0;for(const h of out)if(h.cells.some(x=>x.r===col.length))v+=h.value;return v;}
+function rowHands(pre){if(pre.length<3)return 0;const out=[];evalSeg(pre.map((k,c)=>({r:0,c,k})),'h',out);let v=0;for(const h of out)if(h.cells.some(x=>x.c===pre.length-1))v+=h.value;return v;}
+// how many single sideways moves in the 4 cards just above cell c would make card k match there
+function colRisk(cols,c,k){const col=cols[c];let n=0;
+  for(let i=0;i<4&&i<col.length;i++)for(const nc of [c-1,c+1]){if(nc<0||nc>=COLS)continue;const o=cols[nc][i];
+    const alt=o?col.slice(0,i).concat([o],col.slice(i+1)):col.slice(0,i).concat(col.slice(i+1));
+    if(colHands(alt,k))n++;}
+  return n;}
+let ROWGEN={rows:0,fallback:0,nodes:0};
+function genRow(g){
+  g=g||(S&&S.grid)||emptyGrid();const cols=settledCols(g);
+  const opts=[];for(let r=0;r<5;r++)for(let q=0;q<4;q++)opts.push({r,s:q});
+  const pick=[];let nodes=0;
+  const dfs=c=>{if(c===COLS)return true;let o=opts.slice();for(let i=o.length-1;i>0;i--){const j=rnd(i+1);[o[i],o[j]]=[o[j],o[i]];}
+    o=o.map(k=>({k,w:colRisk(cols,c,k)})).sort((a,b)=>a.w-b.w).map(x=>x.k);   // stable: random within equal risk
+    for(const k of o){if(++nodes>4000)return false;if(colHands(cols[c],k))continue;pick[c]=k;if(rowHands(pick.slice(0,c+1)))continue;if(dfs(c+1))return true;}
+    return false;};
+  let ok=dfs(0);ROWGEN.rows++;ROWGEN.nodes+=nodes;
+  if(!ok){   // practically impossible (columns rule out at most 3 ranks and 1 suit): least-matching of 200 random rows
+    ROWGEN.fallback++;let best=null,bv=1e9;
+    for(let t=0;t<200;t++){const row=[];let v=0;for(let c=0;c<COLS;c++){const k={r:rnd(5),s:rnd(4)};row.push(k);v+=colHands(cols[c],k);}
+      v+=findHands([row.map(k=>Object.assign({},k))],allElig).reduce((a,h)=>a+h.value,0);if(v<bv){bv=v;best=row;}}
+    pick.length=0;pick.push(...best);}
+  return pick.map(k=>{const n=newCard();n.r=k.r;n.s=k.s;return n;});
 }
 
 function newGame(mode){
@@ -288,7 +320,7 @@ function newGame(mode){
     const r=ROWS-1-h;
     for(let t=0;t<40;t++){S.grid[r][c]=newCard();if(!findHands(S.grid,allElig).length)break;}
   }
-  S.preview=genRow();
+  S.preview=genRow(S.grid);
   app='playing';
   banner('ready',{y:300,life:0.95});sfx.ready();
   S.goPending=true;
@@ -468,7 +500,7 @@ function shiftUp(){
   S.shifts++;S.rise-=1;if(S.rise<0)S.rise=0;sfx.rise();
   for(let r=0;r<ROWS-1;r++)S.grid[r]=S.grid[r+1];
   S.grid[ROWS-1]=S.preview;          // exactly the row that was shown: no reroll at insertion
-  S.preview=genRow();
+  S.preview=genRow(S.grid);           // the next row is generated now, against the board it will land under
   S.cursor.r=Math.max(0,S.cursor.r-1);
   if(S.sel)S.sel.r--; if(S.sel&&S.sel.r<0)S.sel=null;
   if(S.drag)S.drag.r--;
@@ -1146,6 +1178,8 @@ window.__royalRush={
   setCursor(r,c){if(S)S.cursor={r,c};},
   set freeze(v){frozen=!!v;},
   get freeze(){return frozen;},
+  get rowGen(){return Object.assign({},ROWGEN);},
+  genRowFor(strGrid){const g=strGrid.map(r=>r.map(x=>x?parseCard(x):null));return genRow(g).map(cardStr);},
   handsIn(strGrid){const g=strGrid.map(r=>r.map(s=>s?parseCard(s):null));return findHands(g,()=>true).map(h=>({name:h.name,value:h.value,cells:h.cells}));},
   get audio(){const T=MUS.tracks;return {ctx:AC?AC.state:'none',sampleRate:AC?AC.sampleRate:0,muted,master:MASTER?MASTER.gain.value:null,
     decoded:Object.keys(BUF).sort(),durations:Object.fromEntries(Object.entries(BUF).map(([k,b])=>[k,+b.duration.toFixed(3)])),lengths:Object.fromEntries(Object.entries(BUF).map(([k,b])=>[k,b.length])),
