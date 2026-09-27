@@ -8,7 +8,7 @@
 
 ![Royal Rush gameplay](media/screenshot.png)
 
-![Royal Rush clear: a flush popping with fire, starbursts and chips flying to the table](media/clear.png)
+![Royal Rush clear: a flush bursting into fireballs and smoke, chips flying to the table](media/clear.png)
 
 ![Royal Rush chain: lightning strike and a chrome 3X](media/chain.png)
 
@@ -16,7 +16,7 @@
 
 A rising-stack poker puzzle game for the browser. A stack of playing cards (10, J, Q, K and A in four suits) climbs up a 5 × 12 board. Slide cards sideways to make poker hands in any row or column. Each hand clears, the cards above fall into the gaps, and a new hand formed by falling cards starts a chain. If the stack reaches the top, the game is over.
 
-Cards are glossy blocks coloured by rank, so you can read the board at a glance: **10 gold, J green, Q pink, K blue, A silver**. The suit symbol on each card is used for flushes. The game is set in a moody, lamp-lit tiki jungle with a spotlit board, dark vignette corners and drifting dust. Matched cards glow orange, flash white, then burst one at a time in warm fire glows with starbursts, light pillars, smoke and glinting sparks, and the chips they held fly out onto the chip table. Every chain link calls down a lightning strike and a big chrome-blue 2X/3X, and big combos punch the camera in with a burst of light.
+Cards are glossy blocks coloured by rank, so you can read the board at a glance: **10 gold, J green, Q pink, K blue, A silver**. The suit symbol on each card is used for flushes. The game is set on a tiki deck at night: torches, silhouetted palms, a warm pool of light on a felt well with an arched, riveted wooden rail. Matched cards glow orange, flash, then burst one at a time in fireballs with rolling smoke and glinting sparks, and the chips they held fly out onto the chip table. Every chain link calls down lightning onto the cards and a big chrome-blue 2X/3X, and big combos punch the camera in with a burst of light.
 
 Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 
@@ -65,7 +65,7 @@ Inspired by a classic 2008 Xbox Live Arcade card puzzle game.
 Open **Settings** from the main menu, from the pause menu, or with the gear button in the top-left corner during a game.
 
 - **Full screen:** fills the screen and keeps the board letterboxed. Esc or F11 also exits. The option is disabled where the browser has no Fullscreen API (for example iPhone Safari).
-- **Reduce flashing:** removes the white clear flashes, the whole-board flash, tile squash-and-stretch, screen shake, lightning strikes, light bursts, the camera zoom punch and the flickering danger pulse. Fire glows are softened and the red danger edges stay steady. Clears become a soft fade with faint starbursts, and the danger zone gets a steady red tint.
+- **Reduce flashing:** removes the white clear flashes, the whole-board flash, tile squash-and-stretch, screen shake, lightning strikes, light bursts, the camera zoom punch and the flickering danger pulse. Fireballs are drawn faint and skip their white-hot frames, and the red danger edges stay steady. Clears become a soft fade with faint starbursts, and the danger zone gets a steady red tint.
 - **Sound effects / Music:** separate volume sliders from 0 to 100 % in steps of 10 (M still mutes everything).
 
 Use the mouse or touch (click toggles, click or drag sliders) or the keyboard: arrow keys to move and adjust, Enter/Space to toggle, Esc or B to go back. Settings are saved in your browser.
